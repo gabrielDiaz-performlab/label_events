@@ -1,25 +1,25 @@
-'''
-gazeEventsDF has labelled data for all trials
-When grabbing trialSourceDict, I must filter to grab data only from the selected trial
-'''
-
 from __future__ import division
 import sys
 sys.path.append("Modules/")
 sys.path.append("../")
-import os
 import pandas as pd
 import numpy as np
 import bokeh.plotting as bkP
 import bokeh.models as bkM
 
+'''
+gazeEventsDF has labelled data for all trials
+When grabbing trialSourceDict, I must filter to grab data only from the selected trial
+'''
+
+
 ############################################################################
 # Global parameters that influence the figure and labelling process
 
 user = 'gdj'
-gazeFileTime =  '2016-4-19-14-4'
+gazeFileTime = '2016-4-19-14-4'
 
-trialNum = 10 # starts at 0
+trialNum = 0 # starts at 0
 selectedBoxID = False  # keeps track of the selected box
 nextBoxID = 0  # a unique identifier for new boxes
 
@@ -30,6 +30,7 @@ def create_glyphs():
     :return: a dictionary of glyphs
     '''
 
+    # noinspection PyPep8Naming
     initRectGlyph = bkM.Rect(x='x',
                              y='y',
                              width='width',
@@ -80,20 +81,24 @@ def create_glyphs():
 
 
 def dataframe_from_pickle():
-
     '''
     Imports a data frame from a pickle file
-    :return:
+    :return: storedDataDF if data found, else False
     '''
+
+    import os.path
 
     # Try to import the pickle
     if not os.path.exists(filePath + gazeFileTime):
         os.makedirs(filePath + gazeFileTime)
-    try:
-        storedDataDF = pd.read_pickle(pickleLoc)
-        print 'Pickle imported from ' + pickleLoc
+
+    if(os.path.isfile(eventPickleLoc)):
+
+        storedDataDF = pd.read_pickle(eventPickleLoc)
+        print 'Pickle imported from ' + eventPickleLoc
         return storedDataDF
-    except:
+
+    else:
 
         print 'No existing data found.  Starting from scratch. '
         return False
@@ -133,13 +138,14 @@ def pickle_trialDataSource():
             trialEventsDF = pd.concat([eventDF, trialEventsDF], axis=0)
 
     if gazeEventsDF is False:
-        pd.to_pickle(trialEventsDF, pickleLoc)
+        pd.to_pickle(trialEventsDF, eventPickleLoc)
     else:
         # Remove old records from current trial from gazeEventsDF
         gazeEventsDF = gazeEventsDF[gazeEventsDF['trialNum'] != trialNum]
         # Add new data
         gazeEventsDF = pd.concat([gazeEventsDF, trialEventsDF], axis=0)
-        pd.to_pickle(gazeEventsDF, pickleLoc)
+        pd.to_pickle(gazeEventsDF, eventPickleLoc)
+
 
 def init_trial_datasources():
 
@@ -168,9 +174,9 @@ def init_trial_datasources():
             data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
 
         aDictOfDataSources = {'undefined': undefinedSource,
-                           'fixation': fixSource,
-                           'saccade': sacSource,
-                           'pursuit': purSource}
+                              'fixation': fixSource,
+                              'saccade': sacSource,
+                              'pursuit': purSource}
 
         return aDictOfDataSources
 
@@ -179,13 +185,16 @@ def init_trial_datasources():
         # Extract trial data from dataFrame
         print 'Extracting trial data sources from gazeEventsDF'
 
+        if trialNum == 10:
+            a=1
+
         gb = gazeEventsDF.groupby(['eventType', 'trialNum'])
 
         aDictOfDataSources = dict()
 
         for key in ['undefined', 'saccade', 'pursuit', 'fixation']:
 
-            if key != 'undefined' and (key, trialNum) in gb.groups.keys():
+            if key != 'undefined' and (key, int(trialNum)) in gb.groups.keys():
 
                 print 'Key is: ' + key + ' Trial: ' + str(trialNum)
 
@@ -305,10 +314,9 @@ def make_trial_figure():  # trialNum, sessionDict, trialSourceDict, glyphDict):
     frametime_fr[0] = 0
 
     fig = bkP.figure(plot_width=1000, plot_height=500,
-                   y_range=[0, 400],
-                   x_range=[np.min(frametime_fr), np.max(frametime_fr)],
-                   x_axis_label='time (s)', y_axis_label='velocity')
-
+                     y_range=[0, 400],
+                     x_range=[np.min(frametime_fr), np.max(frametime_fr)],
+                     x_axis_label='time (s)', y_axis_label='velocity')
 
     fig.ygrid.grid_line_dash = [6, 4]
 
@@ -594,7 +602,7 @@ def changeTrial():
 
     print 'changeTrial: New trial # is ' + str(trialNum)
 
-    global fig, trialSourceDict
+    global fig, trialSourceDict, eyeTrackingDataDict
 
     gbTrial = eyeTrackingDataDict['raw'].groupby(['trialNumber'])
     gbProc = eyeTrackingDataDict['processed'].groupby(['trialNumber'])
@@ -603,7 +611,6 @@ def changeTrial():
     frametime_fr[0] = 0
 
     velocity_fr = gbProc.get_group(trialNum)[('cycSGVel', '2D')]
-    events_fr = gbTrial.get_group(trialNum)['eventFlag'].values
 
     # Update velocity
     target = 'velocity'
@@ -615,7 +622,7 @@ def changeTrial():
     #fig.x_range = bkM.Range1d(frametime_fr[0], frametime_fr[-1])
 
 
-    print '***** BEFORE *****\n'
+    print '\n\n***** BEFORE *****\n'
     print_sources()
 
     trialSourceDict = init_trial_datasources()
@@ -625,7 +632,7 @@ def changeTrial():
     #trialSourceDict['saccade'].trigger('data', new_data, new_data)
 
     force_update_sources()
-    print '***** AFTER *****\n'
+    print '\n***** AFTER *****'
     print_sources()
 
     # Setup callbacks for tools and sources
@@ -693,13 +700,19 @@ def changeTrial():
 
 filePath = 'LabelledGazeEvents/'
 pickleName = gazeFileTime + '_' + user + '.pickle'
-pickleLoc = filePath + gazeFileTime + '/' + pickleName
-
+eventPickleLoc = filePath + gazeFileTime + '/' + pickleName
+timeSeriesPickleLoc = 'Data/' + gazeFileTime + '/' + 'exp_data-' + gazeFileTime + '-proc.pickle'
 ###########################################################################
 # Load datafile with velocity timeseries
 
-eyeTrackingDataDict = pd.read_pickle('Data/' + gazeFileTime + '/' + 'exp_data-' + gazeFileTime + '-proc.pickle')
-numTrials = len(np.unique(eyeTrackingDataDict['processed']['trialNumber']))
+eyeTrackingDataDict = False
+numTrials = False
+
+from os.path import isfile
+
+if isfile(timeSeriesPickleLoc):
+    eyeTrackingDataDict = pd.read_pickle(timeSeriesPickleLoc)
+    numTrials = len(np.unique(eyeTrackingDataDict['processed']['trialNumber']))
 
 ###########################################################################
 # Get stored labels / rectangles
