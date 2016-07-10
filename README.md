@@ -6,8 +6,7 @@ To run, open terminal>  bokeh serve --show eventlabeller.py
 
 To switch to client mode, uncomment the bottom-most lines of code:
 
-# from bokeh.client import push_session
-# session = push_session(curdoc())
-# session.show()  # open the document in a browser
-#
-# session.loop_until_closed()  # run forever
+from bokeh.client import push_session
+session = push_session(curdoc())
+session.show()  # open the document in a browser
+session.loop_until_closed()  # run forever
