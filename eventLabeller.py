@@ -156,66 +156,72 @@ def init_trial_datasources():
     :return: Void
     '''
 
-    global nextBoxID
+    # No data saved, so we start with empty datasources
 
-    if( gazeEventsDF is False ):
+    undefinedSource = bkM.ColumnDataSource(
+        data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
+    fixSource = bkM.ColumnDataSource(
+        data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
+    sacSource = bkM.ColumnDataSource(
+        data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
+    purSource = bkM.ColumnDataSource(
+        data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
 
+    aDictOfDataSources = {'undefined': undefinedSource,
+                          'fixation': fixSource,
+                          'saccade': sacSource,
+                          'pursuit': purSource}
+
+    return aDictOfDataSources
+
+
+def update_trial_dataSources():
+
+    global nextBoxID, trialSourceDict, selectedBoxID
+
+    selectedBoxID = False
+
+    if (gazeEventsDF is False):
         print 'gazeEventsDF is False'
-
-        # No data saved, so we start with empty datasources
-
-        undefinedSource = bkM.ColumnDataSource(
-            data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
-        fixSource = bkM.ColumnDataSource(
-            data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
-        sacSource = bkM.ColumnDataSource(
-            data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
-        purSource = bkM.ColumnDataSource(
-            data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
-
-        aDictOfDataSources = {'undefined': undefinedSource,
-                              'fixation': fixSource,
-                              'saccade': sacSource,
-                              'pursuit': purSource}
-
-        return aDictOfDataSources
-
+        return
     else:
-
         # Extract trial data from dataFrame
         print 'Extracting trial data sources from gazeEventsDF'
 
-        if trialNum == 10:
-            a=1
 
-        gb = gazeEventsDF.groupby(['eventType', 'trialNum'])
+    gb = gazeEventsDF.groupby(['eventType', 'trialNum'])
 
-        aDictOfDataSources = dict()
+    new_data = False
 
-        for key in ['undefined', 'saccade', 'pursuit', 'fixation']:
+    for key in ['undefined', 'saccade', 'pursuit', 'fixation']:
 
-            if key != 'undefined' and (key, int(trialNum)) in gb.groups.keys():
+        if key != 'undefined' and (key, int(trialNum)) in gb.groups.keys():
 
-                print 'Key is: ' + key + ' Trial: ' + str(trialNum)
+            print 'Key is: ' + key + ' Trial: ' + str(trialNum)
 
-                # Initialize dict entry with data from dataframe
-                aDictOfDataSources[key] = bkM.ColumnDataSource(gb.get_group((key, trialNum)).drop('eventType', axis=1))
+            # Initialize dict entry with data from dataframe
+            new_data = gb.get_group((key, trialNum)).drop('eventType', axis=1)
 
-                # The process creates an unwanted "index" key in the sources
-                # lets remove it.
-                del aDictOfDataSources[key].data['index']
+            # The process creates an unwanted "index" key in the sources
+            # lets remove it.
+            #del new_data['index']
 
-            else:
-                # Initialize dict entry with empty data
-                aDictOfDataSources[key] = bkM.ColumnDataSource(
-                    data=dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[]))
+            trialSourceDict[key].data = new_dict = new_data.to_dict('list')
 
-        # Set boxID to a unique value (highest observed +1)
-        for key, source in aDictOfDataSources.items():
-            if len(source.data['boxID']) > 0:
-                nextBoxID = np.max(np.hstack([nextBoxID, np.max(source.data['boxID'])])) + 1
 
-        return aDictOfDataSources
+        else:
+            # Initialize dict entry with empty data
+            new_data  =  dict(x=[], y=[], width=[], height=[], startTime=[], endTime=[], boxID=[], trialNum=[])
+            trialSourceDict[key].data = new_data
+
+
+        # explicit trigger
+        trialSourceDict[key].trigger('data', new_data, new_data)
+
+    # Set boxID to a unique value (highest observed +1)
+    for key, source in trialSourceDict.items():
+        if len(source.data['boxID']) > 0:
+            nextBoxID = np.max(np.hstack([nextBoxID, np.max(source.data['boxID'])])) + 1
 
 
 # def timeSeries(frametime_fr=None, yDataList=None, yLabel=None, legendLabels=None, yLims=[0, 300],
@@ -537,19 +543,21 @@ def remove_cb():
     global trialSourceDict, selectedBoxID
 
     sourceKey = find_source_of_selectedID()
-    listIdx_of_selected = trialSourceDict[sourceKey].data['boxID'].index(selectedBoxID)
 
-    selectedBoxID = False
+    if( sourceKey[0] is not False):
 
-    newData = trialSourceDict[sourceKey].data
+        listIdx_of_selected = trialSourceDict[sourceKey].data['boxID'].index(selectedBoxID)
 
-    #  For each key in the source, remove the values of entry valueIdx
-    for key, values in newData.iteritems():
-        del values[listIdx_of_selected]
+        selectedBoxID = False
 
-    trialSourceDict[sourceKey].data = newData
-    trialSourceDict[sourceKey].trigger('data', newData, newData)
+        newData = trialSourceDict[sourceKey].data
 
+        #  For each key in the source, remove the values of entry valueIdx
+        for key, values in newData.iteritems():
+            del values[listIdx_of_selected]
+
+        trialSourceDict[sourceKey].data = newData
+        trialSourceDict[sourceKey].trigger('data', newData, newData)
 
 def label_saccade_cb():
     apply_label('saccade')
@@ -625,7 +633,8 @@ def changeTrial():
     print '\n\n***** BEFORE *****\n'
     print_sources()
 
-    trialSourceDict = init_trial_datasources()
+    update_trial_dataSources()
+
     #[source.trigger('data', source.data, source.data) for source in trialSourceDict.values()]
 
     #new_data = trialSourceDict['saccade'].data
@@ -635,11 +644,11 @@ def changeTrial():
     print '\n***** AFTER *****'
     print_sources()
 
-    # Setup callbacks for tools and sources
-    trialSourceDict['undefined'].on_change('selected', undefined_selected)
-    trialSourceDict['saccade'].on_change('selected', saccade_selected)
-    trialSourceDict['pursuit'].on_change('selected', pursuit_selected)
-    trialSourceDict['fixation'].on_change('selected', fixation_selected)
+    # # Setup callbacks for tools and sources
+    # trialSourceDict['undefined'].on_change('selected', undefined_selected)
+    # trialSourceDict['saccade'].on_change('selected', saccade_selected)
+    # trialSourceDict['pursuit'].on_change('selected', pursuit_selected)
+    # trialSourceDict['fixation'].on_change('selected', fixation_selected)
 
     global selectedBoxID
     selectedBoxID = False
@@ -694,6 +703,8 @@ def changeTrial():
 #
 #     return widgets
 
+
+
 ############################################################################
 
 #  Directories, etc
@@ -721,6 +732,7 @@ gazeEventsDF = dataframe_from_pickle()
 ###########################################################################
 # Create figure using velocity timeseries and labelled events (if any)
 trialSourceDict = init_trial_datasources()
+update_trial_dataSources()
 print_sources()
 
 glyphDict = create_glyphs()
@@ -761,7 +773,7 @@ widgetBox = widgetbox(*widgets, sizing_mode='fixed')
 # Add figure and widgets to a layout
 ###########################################################################
 from bokeh.layouts import layout
-layout = layout( [[fig],[widgetBox]] , sizing_mode='fixed')
+layout = layout( [[fig], [widgetBox]], sizing_mode='fixed')
 
 ###########################################################################
 # Add layout to current document
