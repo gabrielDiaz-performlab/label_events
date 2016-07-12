@@ -6,18 +6,29 @@ import pandas as pd
 import numpy as np
 import bokeh.plotting as bkP
 import bokeh.models as bkM
-
+import getpass
+from os import getcwd
 '''
 gazeEventsDF has labelled data for all trials
 When grabbing trialSourceDict, I must filter to grab data only from the selected trial
 '''
 
+############################################################################
+# Get username and filename
+
+user = getpass.getuser()
+
+from Tkinter import *
+import Tkinter, Tkconstants, tkFileDialog
+root = Tk()
+root.directory = tkFileDialog.askdirectory(initialdir=getcwd()+'/Data/', title="Select data directory")
+gazeFileTime = root.directory.split('/')[-1]
+root.destroy()
+
+#gazeFileTime = '2016-4-19-14-4'
 
 ############################################################################
 # Global parameters that influence the figure and labelling process
-
-user = 'gdj'
-gazeFileTime = '2016-4-19-14-4'
 
 trialNum = 0 # starts at 0
 selectedBoxID = False  # keeps track of the selected box
@@ -378,6 +389,8 @@ def make_trial_figure():  # trialNum, sessionDict, trialSourceDict, glyphDict):
 
     fig.tool_events.on_change('geometries', box_callback)
 
+    fig.toolbar.active_drag = fig.select(type=bkM.BoxSelectTool)[0]
+
     return fig
 
 
@@ -422,30 +435,16 @@ def box_callback(attr, old, new):
     selectedBoxID = nextBoxID
     nextBoxID += 1
 
-
-def tap_callback(source, valueIdx):
-    '''
-    Note that the tap callback is executed once per data source attached to the figure.
-    So, we have some checks to make sure that ...
-    '''
+def selection_cb(sourceKey,selected):
 
     global selectedBoxID
-
-    if( valueIdx ):
-        print 'tap_callback: selectedBoxID = ' + str(selectedBoxID)
-        selectedBoxID = source.data['boxID'][valueIdx]
-    #except:
-    #    print 'tap_callback: In tap_callback(), valueidx = ' + str(valueIdx)
-
-
-def selection_cb(sourceKey,selected):
 
     if (len(selected['1d']['indices']) == 0):
         # Hit test, but nothing actually selected
         return
     else:
-        tap_callback(trialSourceDict[sourceKey], selected['1d']['indices'][0])
-
+        selectedBoxID = trialSourceDict[sourceKey].data['boxID'][selected['1d']['indices'][0]]
+        print 'selectedBoxID = ' + str(selectedBoxID)
 
 def undefined_selected(attr, old, new):
     selection_cb('undefined', new)
@@ -453,7 +452,6 @@ def undefined_selected(attr, old, new):
 
 def fixation_selected(attr, old, new):
     selection_cb('fixation', new)
-
 
 def saccade_selected(attr, old, new):
     selection_cb('saccade', new)
@@ -520,6 +518,7 @@ def move_between_sources(oldSourceKey, newSourceKey):
     pickle_trialDataSource()
 
 def apply_label(newSourceLabel):
+
     # This assumes that data for the selected event belongs to undefinedSource.
     # This may not be the case.
 
@@ -535,6 +534,8 @@ def apply_label(newSourceLabel):
 
     move_between_sources(oldSourceLabel, newSourceLabel)
 
+    force_update_sources()
+
     selectedBoxID = False
 
 
@@ -544,11 +545,9 @@ def remove_cb():
 
     sourceKey = find_source_of_selectedID()
 
-    if( sourceKey[0] is not False):
+    if( sourceKey[0] is not False ):
 
         listIdx_of_selected = trialSourceDict[sourceKey].data['boxID'].index(selectedBoxID)
-
-        selectedBoxID = False
 
         newData = trialSourceDict[sourceKey].data
 
@@ -558,6 +557,12 @@ def remove_cb():
 
         trialSourceDict[sourceKey].data = newData
         trialSourceDict[sourceKey].trigger('data', newData, newData)
+
+    #force_update_sources()
+
+    selectedBoxID = False
+
+    pickle_trialDataSource()
 
 def label_saccade_cb():
     apply_label('saccade')
@@ -581,8 +586,8 @@ def trial_text_cb(attr, old, new):
 
     global trialNum
 
-    if int(new) > numTrials :
-        trial_text.value = str(numTrials)-1
+    if int(new) == numTrials :
+        trial_text.value = str(numTrials-1)
         trialNum = numTrials-1
 
     elif int(new) < 0:
@@ -627,82 +632,50 @@ def changeTrial():
     new_data['y'] = velocity_fr
     fig.select(target)[0].data_source.data = new_data
 
-    #fig.x_range = bkM.Range1d(frametime_fr[0], frametime_fr[-1])
-
-
     print '\n\n***** BEFORE *****\n'
     print_sources()
 
     update_trial_dataSources()
 
-    #[source.trigger('data', source.data, source.data) for source in trialSourceDict.values()]
-
-    #new_data = trialSourceDict['saccade'].data
-    #trialSourceDict['saccade'].trigger('data', new_data, new_data)
-
     force_update_sources()
     print '\n***** AFTER *****'
     print_sources()
 
-    # # Setup callbacks for tools and sources
-    # trialSourceDict['undefined'].on_change('selected', undefined_selected)
-    # trialSourceDict['saccade'].on_change('selected', saccade_selected)
-    # trialSourceDict['pursuit'].on_change('selected', pursuit_selected)
-    # trialSourceDict['fixation'].on_change('selected', fixation_selected)
-
     global selectedBoxID
     selectedBoxID = False
 
-    # fig = make_trial_figure()
-    #
-    # # Add figure and widgets to a layout
-    # ###########################################################################
-    # from bokeh.layouts import layout
-    # layout = layout([[fig], [widgetBox]], sizing_mode='fixed')
-    #
-    # ###########################################################################
-    # # Add layout to current document
-    # from bokeh.io import curdoc, set_curdoc
-    #
-    # curdoc().clear()
-    # curdoc().add_root(layout)
+def prev_trial_cb():
 
-    # target = 'eventLabels'
-    # new_data = fig.select(target)[0].data_source.data
-    # new_data['x'] = frametime_fr[np.where(events_fr > 2)] + .01
-    # new_data['y'] = [fig.y_range.end * .9] * len(frametime_fr[np.where(events_fr > 2)])
-    # fig.select(target)[0].data_source.data = new_data
-    #
-    # target = 'eventLines'
-    # new_data = fig.select(target)[0].data_source.data
-    # new_data['x'] = [[x, x] for x in frametime_fr[np.where(events_fr > 2)]]
-    # new_data['y'] = [[fig.y_range.start, fig.y_range.end * .9]] * sum(events_fr > 2)
-    # fig.select(target)[0].data_source.data = new_data
+    global trialNum
 
+    trialNum = trialNum - 1
 
-# def add_widgets():
-#
-#     from bokeh.models.widgets import Button, TextInput
-#
-#     label_saccade_button = Button(label='saccade')
-#     label_saccade_button.on_click(label_saccade_cb)
-#
-#     label_pursuit_button = Button(label='pursuit')
-#     label_pursuit_button.on_click(label_pursuit_cb)
-#
-#     label_fixation_button = Button(label='fixation')
-#     label_fixation_button.on_click(label_fixation_cb)
-#
-#     remove_button = Button(label='remove')
-#     remove_button.on_click(remove_cb)
-#
-#     trial_text = TextInput(value=str(trialNum), title="Trial: ")
-#     trial_text.on_change('value', trial_text_cb)
-#
-#     widgets = [label_saccade_button, label_pursuit_button, label_fixation_button, remove_button, trial_text]
-#
-#     return widgets
+    if trialNum > numTrials:
+        trialNum = numTrials - 1
 
+    elif trialNum < 0:
+
+        trialNum = 0
+
+    trial_text.value = str(trialNum)
+
+    changeTrial()
+
+def next_trial_cb():
+
+    global trialNum
+
+    trialNum = trialNum + 1
+
+    if trialNum == numTrials:
+        trialNum = numTrials - 1
+
+    elif trialNum < 0:
+        trialNum = 0
+
+    trial_text.value = str(trialNum)
+
+    changeTrial()
 
 
 ############################################################################
@@ -713,6 +686,7 @@ filePath = 'LabelledGazeEvents/'
 pickleName = gazeFileTime + '_' + user + '.pickle'
 eventPickleLoc = filePath + gazeFileTime + '/' + pickleName
 timeSeriesPickleLoc = 'Data/' + gazeFileTime + '/' + 'exp_data-' + gazeFileTime + '-proc.pickle'
+
 ###########################################################################
 # Load datafile with velocity timeseries
 
@@ -762,26 +736,37 @@ label_fixation_button.on_click(label_fixation_cb)
 remove_button = Button(label='remove')
 remove_button.on_click(remove_cb)
 
-trial_text = TextInput(value=str(trialNum), title="Trial: ")
+trial_text = TextInput(value=str(trialNum))
 trial_text.on_change('value', trial_text_cb)
 
-widgets = [label_saccade_button, label_pursuit_button, label_fixation_button, remove_button, trial_text]
+nextTrial_button = Button(label='+trial')
+nextTrial_button .on_click(next_trial_cb)
 
-from bokeh.layouts import widgetbox
-widgetBox = widgetbox(*widgets, sizing_mode='fixed')
+prevTrial_button= Button(label='-trial')
+prevTrial_button.on_click(prev_trial_cb)
 
-# Add figure and widgets to a layout
+from bokeh.layouts import row
+buttonBox = row(label_saccade_button, label_pursuit_button, label_fixation_button, remove_button)
+trialSelectBox = row(prevTrial_button, trial_text, nextTrial_button)
+#, sizing_mode='scale_width'
+
 ###########################################################################
+# Get the HTML description header
+from os.path import dirname, join
+desc = bkM.Div(text=open(join(dirname(__file__), "description.html")).read(), width=800)
+
+###########################################################################
+# Add desc, figure and widgets to a layout
 from bokeh.layouts import layout
-layout = layout( [[fig], [widgetBox]], sizing_mode='fixed')
+layout = layout([[desc], [fig], [buttonBox],[trialSelectBox]])
 
 ###########################################################################
 # Add layout to current document
 from bokeh.io import curdoc
 curdoc().add_root(layout)
 
-from bokeh.client import push_session
-session = push_session(curdoc())
-session.show()  # open the document in a browser
-
-session.loop_until_closed()  # run forever
+# from bokeh.client import push_session
+# session = push_session(curdoc())
+# session.show()  # open the document in a browser
+#
+# session.loop_until_closed()  # run forever
