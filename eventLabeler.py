@@ -765,8 +765,8 @@ layout = layout([[desc], [fig], [buttonBox],[trialSelectBox]])
 from bokeh.io import curdoc
 curdoc().add_root(layout)
 
-from bokeh.client import push_session
-session = push_session(curdoc())
-session.show()  # open the document in a browser
+# from bokeh.client import push_session
+# session = push_session(curdoc())
+# session.show()  # open the document in a browser
 
-session.loop_until_closed()  # run forever
+# session.loop_until_closed()  # run forever
